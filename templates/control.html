@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subathon Kontrol Paneli</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 3em;
+            margin-bottom: 10px;
+            text-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .card h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .timer-display {
+            font-size: 4em;
+            font-weight: bold;
+            color: #667eea;
+            text-align: center;
+            font-family: 'Courier New', monospace;
+            margin: 20px 0;
+        }
+
+        .status {
+            text-align: center;
+            padding: 15px;
+            border-radius: 10px;
+            font-weight: bold;
+            font-size: 1.2em;
+            margin-bottom: 20px;
+        }
+
+        .status.running {
+            background: #51cf66;
+            color: white;
+        }
+
+        .status.stopped {
+            background: #ff6b6b;
+            color: white;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 10px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-primary {
+            background: #51cf66;
+            color: white;
+        }
+
+        .btn-danger {
+            background: #ff6b6b;
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #667eea;
+            color: white;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s ease;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .events-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .event-item {
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 10px;
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+        }
+
+        .event-item.subscription {
+            border-left-color: #51cf66;
+        }
+
+        .event-item.gift_subscription {
+            border-left-color: #f59f00;
+        }
+
+        .event-item.kick {
+            border-left-color: #ff6b6b;
+        }
+
+        .event-item .event-time {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .event-item .event-message {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .event-item .event-time-added {
+            color: #51cf66;
+            font-weight: bold;
+        }
+
+        .url-box {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+
+        .url-box label {
+            font-weight: bold;
+            display: block;
+            margin-bottom: 10px;
+            color: #667eea;
+        }
+
+        .url-box input {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #667eea;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 1em;
+        }
+
+        .info-text {
+            margin-top: 10px;
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .config-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .color-input {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .rewards-list {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #eee;
+            border-radius: 10px;
+            padding: 10px;
+        }
+        .reward-row {
+            display: grid;
+            grid-template-columns: 1fr 90px 90px 90px;
+            align-items: center;
+            gap: 10px;
+            padding: 8px;
+            border-bottom: 1px dashed #eee;
+        }
+        .reward-row:last-child { border-bottom: none; }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .config-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⏱️ SUBATHON KONTROL PANELİ</h1>
+            <p>Timer'ı kontrol edin ve eventleri izleyin</p>
+        </div>
+
+        <div class="grid">
+            <!-- Timer Card -->
+            <div class="card">
+                <h2>📊 Timer Durumu</h2>
+                <div id="status" class="status stopped">⏸️ DURDU</div>
+                <div id="timer" class="timer-display">00:00:00</div>
+                
+                <button class="btn btn-primary" onclick="startTimer()">▶️ Başlat</button>
+                <button class="btn btn-danger" onclick="stopTimer()">⏹️ Durdur</button>
+                
+                <div class="input-group" style="margin-top: 20px;">
+                    <label>Başlangıç Süresi (Dakika)</label>
+                    <input type="number" id="startMinutes" value="30" min="1">
+                </div>
+            </div>
+
+            <!-- Manuel Süre Ekleme -->
+            <div class="card">
+                <h2>⏲️ Manuel Süre Ekle</h2>
+                <div class="input-group">
+                    <label>Süre (Saniye)</label>
+                    <input type="number" id="addSeconds" value="60" min="1">
+                </div>
+                <div class="input-group">
+                    <label>Mesaj (Opsiyonel)</label>
+                    <input type="text" id="addMessage" placeholder="Ör: Test için süre eklendi">
+                </div>
+                <button class="btn btn-secondary" onclick="addTime()">➕ Süre Ekle</button>
+                
+                <div style="margin-top: 20px;">
+                    <button class="btn btn-secondary" onclick="addTime(60, '+1 Dakika')">+1 Dakika</button>
+                    <button class="btn btn-secondary" onclick="addTime(300, '+5 Dakika')">+5 Dakika</button>
+                    <button class="btn btn-secondary" onclick="addTime(600, '+10 Dakika')">+10 Dakika</button>
+                </div>
+            </div>
+
+            <!-- OBS Browser Source URL -->
+            <div class="card">
+                <h2>📺 OBS Browser Source</h2>
+                <div class="url-box">
+                    <label>Timer URL (OBS'ye ekleyin):</label>
+                    <input type="text" id="timerUrl" readonly onclick="this.select()">
+                    <div class="info-text">
+                        💡 OBS'de yeni bir Browser Source ekleyin ve bu URL'yi yapıştırın.<br>
+                        Önerilen boyut: 1920x1080 veya tam ekran
+                    </div>
+                </div>
+            </div>
+
+            <!-- Test Events -->
+            <div class="card">
+                <h2>🧪 Test Olayları</h2>
+                <div class="config-grid">
+                    <div class="input-group">
+                        <label>Abone Kullanıcı Adı</label>
+                        <input type="text" id="testSubUser" placeholder="Tester">
+                    </div>
+                    <div class="input-group">
+                        <label>Hediye Abone - Gifter</label>
+                        <input type="text" id="testGiftUser" placeholder="Tester">
+                    </div>
+                    <div class="input-group">
+                        <label>Hediye Adedi</label>
+                        <input type="number" id="testGiftQty" value="5" min="1">
+                    </div>
+                </div>
+                <div style="margin-top: 15px; display: flex; gap: 10px;">
+                    <button class="btn btn-secondary" onclick="testSub()">⭐ Test Abone</button>
+                    <button class="btn btn-secondary" onclick="testGiftSub()">🎁 Test Hediye Abone</button>
+                </div>
+                <div class="info-text">Test olayları overlay ve timer'a anında yansır.</div>
+            </div>
+
+            <!-- Son Eventler -->
+            <div class="card">
+                <h2>📜 Son Eventler</h2>
+                <div id="eventsList" class="events-list">
+                    <div style="text-align: center; color: #999; padding: 50px;">
+                        Henüz event yok
+                    </div>
+                </div>
+            </div>
+
+            <!-- Görünüm Ayarları -->
+            <div class="card">
+                <h2>🎨 Görünüm Ayarları</h2>
+                <div class="config-grid">
+                    <div class="input-group">
+                        <label>Başlık Metni</label>
+                        <input type="text" id="uiTitle" placeholder="⏱️ SUBATHON">
+                    </div>
+                    <div class="input-group">
+                        <label>Etiket Metni</label>
+                        <input type="text" id="uiLabel" placeholder="KALAN SÜRE">
+                    </div>
+                    <div class="input-group">
+                        <label>Abone İsim Rengi</label>
+                        <div class="color-input">
+                            <input type="color" id="uiSubNameColorPicker">
+                            <input type="text" id="uiSubNameColor" placeholder="#ffeb3b">
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label>Arkaplan Rengi 1</label>
+                        <div class="color-input">
+                            <input type="color" id="uiBgStartPicker">
+                            <input type="text" id="uiBgStart" placeholder="#667eea">
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <label>Arkaplan Rengi 2</label>
+                        <div class="color-input">
+                            <input type="color" id="uiBgEndPicker">
+                            <input type="text" id="uiBgEnd" placeholder="#764ba2">
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label>Timer Rengi</label>
+                        <div class="color-input">
+                            <input type="color" id="uiTimerColorPicker">
+                            <input type="text" id="uiTimerColor" placeholder="#ffffff">
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <label>Timer Yazı Boyutu (em)</label>
+                        <input type="number" id="uiTimerSize" min="2" max="12" step="0.1" value="7">
+                    </div>
+
+                    <div class="input-group">
+                        <label>Köşe Yuvarlaklığı (px)</label>
+                        <input type="number" id="uiRadius" min="0" max="80" step="1" value="30">
+                    </div>
+                    <div class="input-group">
+                        <label>Gölge</label>
+                        <input type="checkbox" id="uiShadow" checked>
+                    </div>
+
+                    <div class="input-group">
+                        <label>Combo Üst Mesafe (px)</label>
+                        <input type="number" id="uiComboTop" min="0" max="400" step="1" value="20">
+                    </div>
+                    <div class="input-group">
+                        <label>Combo Sağ Mesafe (px)</label>
+                        <input type="number" id="uiComboRight" min="0" max="400" step="1" value="20">
+                    </div>
+                </div>
+                <div style="margin-top: 15px; display: flex; gap: 10px;">
+                    <button class="btn btn-secondary" onclick="loadUI()">⟳ Yükle</button>
+                    <button class="btn btn-primary" onclick="saveUI()">💾 Kaydet ve Uygula</button>
+                </div>
+                <div class="info-text">Değişiklikler OBS overlay'e anlık yansır.</div>
+            </div>
+
+            <!-- Subathon Ayarları -->
+            <div class="card">
+                <h2>⚙️ Subathon Ayarları</h2>
+                <div class="config-grid">
+                    <div class="input-group">
+                        <label>Kick başına +saniye</label>
+                        <input type="number" id="cfgKickSec" min="1" max="3600" step="1">
+                    </div>
+                    <div class="input-group">
+                        <label>Abone başına +dakika</label>
+                        <input type="number" id="cfgSubMin" min="0" max="10080" step="1">
+                    </div>
+                    <div class="input-group">
+                        <label>Hediye abone başına +dakika</label>
+                        <input type="number" id="cfgGiftSubMin" min="0" max="10080" step="1">
+                    </div>
+                    <div class="input-group">
+                        <label>Maksimum süre (dk)</label>
+                        <input type="number" id="cfgMaxMin" min="1" max="10080" step="1">
+                    </div>
+                    <div class="input-group">
+                        <label>Maksimum süre sınırını kullan</label>
+                        <input type="checkbox" id="cfgEnableMax">
+                    </div>
+                    <div class="input-group">
+                        <label>Kick süre ekleme aktif</label>
+                        <input type="checkbox" id="cfgEnableKick">
+                    </div>
+                    <div class="input-group">
+                        <label>Abone süre ekleme aktif</label>
+                        <input type="checkbox" id="cfgEnableSub">
+                    </div>
+                    <div class="input-group">
+                        <label>Hediye abone süre ekleme aktif</label>
+                        <input type="checkbox" id="cfgEnableGiftSub">
+                    </div>
+                </div>
+                <div style="margin-top: 15px; display: flex; gap: 10px;">
+                    <button class="btn btn-secondary" onclick="loadConfig()">⟳ Yükle</button>
+                    <button class="btn btn-primary" onclick="saveConfig()">💾 Kaydet</button>
+                </div>
+            </div>
+
+            <!-- Sadakat Ödülleri -->
+            <div class="card">
+                <h2>🏆 Sadakat Ödülleri</h2>
+                <div class="config-grid">
+                    <div class="input-group">
+                        <label>Ödül süre ekleme aktif</label>
+                        <input type="checkbox" id="rwEnable">
+                    </div>
+                    <div class="input-group">
+                        <label>Bilinmeyen ödül varsayılan +saniye</label>
+                        <input type="number" id="rwDefaultSec" min="0" max="3600" step="1" value="5">
+                    </div>
+                </div>
+                <div class="rewards-list" id="rewardsList"></div>
+                <div style="margin-top: 15px; display: flex; gap: 10px;">
+                    <button class="btn btn-secondary" onclick="loadRewards()">⟳ Ödülleri Yükle</button>
+                    <button class="btn btn-primary" onclick="saveRewards()">💾 Ödülleri Kaydet</button>
+                </div>
+                <div class="info-text">Yeni ödül görülürse listeye otomatik eklenir (başta kapalı gelir).</div>
+            </div>
+
+            <!-- Kick Ödülleri (Tiers) -->
+            <div class="card">
+                <h2>💸 Kick Ödülleri</h2>
+                <div class="config-grid">
+                    <div class="input-group">
+                        <label>Özel tier süreleri aktif</label>
+                        <input type="checkbox" id="ktEnable">
+                    </div>
+                </div>
+                <div class="rewards-list" id="kickTiersList"></div>
+                <div style="margin-top: 15px; display: flex; gap: 10px;">
+                    <button class="btn btn-secondary" onclick="loadKickTiers()">⟳ Tierleri Yükle</button>
+                    <button class="btn btn-primary" onclick="saveKickTiers()">💾 Tierleri Kaydet</button>
+                </div>
+                <div class="info-text">Tier kapalıysa amount × (kick başına saniye) kuralı çalışır.</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let events = [];
+        let endTime = null;
+        let countdownInterval = null;
+
+        // Sayfa yüklendiğinde URL'yi ayarla
+        document.getElementById('timerUrl').value = window.location.origin + '/';
+
+        // Countdown fonksiyonu
+        function updateCountdown() {
+            if (!endTime) return;
+            
+            const now = new Date().getTime();
+            const remaining = endTime - now;
+            
+            const timerElement = document.getElementById('timer');
+            
+            if (remaining <= 0) {
+                timerElement.textContent = '00:00:00';
+                document.getElementById('status').textContent = '🎉 BİTTİ';
+                document.getElementById('status').className = 'status stopped';
+                if (countdownInterval) {
+                    clearInterval(countdownInterval);
+                    countdownInterval = null;
+                }
+                endTime = null;
+                return;
+            }
+            
+            // Saat:Dakika:Saniye formatı
+            const totalSeconds = Math.floor(remaining / 1000);
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+            
+            const formatted = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            timerElement.textContent = formatted;
+        }
+
+        // Timer güncellemesi
+        socket.on('timer_update', (data) => {
+            const timerElement = document.getElementById('timer');
+            const statusElement = document.getElementById('status');
+            
+            if (data.is_running) {
+                // Bitiş zamanını hesapla
+                endTime = new Date().getTime() + (data.remaining_seconds * 1000);
+                
+                // Timer'ı hemen güncelle
+                updateCountdown();
+                
+                // Eğer interval yoksa başlat
+                if (!countdownInterval) {
+                    countdownInterval = setInterval(updateCountdown, 100); // Her 100ms'de güncelle
+                }
+                
+                statusElement.textContent = '▶️ ÇALIŞIYOR';
+                statusElement.className = 'status running';
+            } else {
+                endTime = null;
+                if (countdownInterval) {
+                    clearInterval(countdownInterval);
+                    countdownInterval = null;
+                }
+                
+                if (data.ended) {
+                    timerElement.textContent = '00:00:00';
+                    statusElement.textContent = '🎉 BİTTİ';
+                } else {
+                    timerElement.textContent = data.formatted || '00:00:00';
+                    statusElement.textContent = '⏸️ DURDU';
+                }
+                statusElement.className = 'status stopped';
+            }
+        });
+
+        // Yeni event geldiğinde
+        socket.on('new_event', (event) => {
+            events.unshift(event);
+            if (events.length > 50) {
+                events = events.slice(0, 50);
+            }
+            updateEventsList();
+        });
+
+        // Eventler listesini güncelle
+        function updateEventsList() {
+            const listElement = document.getElementById('eventsList');
+            
+            if (events.length === 0) {
+                listElement.innerHTML = '<div style="text-align: center; color: #999; padding: 50px;">Henüz event yok</div>';
+                return;
+            }
+            
+            listElement.innerHTML = events.map(event => {
+                const seconds = event.seconds_added;
+                const timeText = seconds >= 60 
+                    ? `+${Math.floor(seconds / 60)} dakika` 
+                    : `+${seconds} saniye`;
+                
+                return `
+                    <div class="event-item ${event.type}">
+                        <div class="event-time">${event.time}</div>
+                        <div class="event-message">${event.message}</div>
+                        <div class="event-time-added">${timeText}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Timer'ı başlat
+        async function startTimer() {
+            const minutes = parseInt(document.getElementById('startMinutes').value) || 30;
+            
+            const response = await fetch('/api/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ minutes })
+            });
+            
+            const data = await response.json();
+            alert(data.message);
+        }
+
+        // Timer'ı durdur
+        async function stopTimer() {
+            if (!confirm('Timer\'ı durdurmak istediğinizden emin misiniz?')) {
+                return;
+            }
+            
+            const response = await fetch('/api/stop', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            const data = await response.json();
+            alert(data.message);
+        }
+
+        // Süre ekle
+        async function addTime(seconds, message) {
+            if (!seconds) {
+                seconds = parseInt(document.getElementById('addSeconds').value) || 60;
+                message = document.getElementById('addMessage').value || 'Manuel süre eklendi';
+            }
+            
+            const response = await fetch('/api/add_time', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ seconds, message })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                document.getElementById('addSeconds').value = 60;
+                document.getElementById('addMessage').value = '';
+            }
+        }
+
+        // İlk yüklemede status bilgisi al
+        socket.on('connect', async () => {
+            const response = await fetch('/api/status');
+            const data = await response.json();
+            
+            if (data.events) {
+                events = data.events;
+                updateEventsList();
+            }
+            await loadUI();
+            await loadConfig();
+            await loadRewards();
+            await loadKickTiers();
+        });
+
+        // Rewards live update: yeni ödül listesi otomatik görünsün
+        socket.on('rewards_update', async () => {
+            await loadRewards();
+        });
+
+        // --- UI Ayarları ---
+        async function loadUI() {
+            try {
+                const res = await fetch('/api/ui');
+                if (!res.ok) return;
+                const data = await res.json();
+                const ui = data.ui || {};
+                setInput('uiTitle', ui.title_text, '⏱️ SUBATHON');
+                setInput('uiLabel', ui.label_text, 'KALAN SÜRE');
+                setColor('uiBgStartPicker', 'uiBgStart', ui.bg_start, '#667eea');
+                setColor('uiBgEndPicker', 'uiBgEnd', ui.bg_end, '#764ba2');
+                setColor('uiTimerColorPicker', 'uiTimerColor', ui.timer_color, '#ffffff');
+                setColor('uiSubNameColorPicker', 'uiSubNameColor', ui.sub_name_color, '#ffeb3b');
+                setNumber('uiTimerSize', ui.timer_font_size_em, 7);
+                setNumber('uiRadius', ui.radius_px, 30);
+                document.getElementById('uiShadow').checked = !!ui.shadow;
+                setNumber('uiComboTop', ui.combo_top_px, 20);
+                setNumber('uiComboRight', ui.combo_right_px, 20);
+            } catch (_) {}
+        }
+
+        async function saveUI() {
+            const payload = {
+                title_text: document.getElementById('uiTitle').value,
+                label_text: document.getElementById('uiLabel').value,
+                bg_start: document.getElementById('uiBgStart').value,
+                bg_end: document.getElementById('uiBgEnd').value,
+                timer_color: document.getElementById('uiTimerColor').value,
+                    sub_name_color: document.getElementById('uiSubNameColor').value,
+                timer_font_size_em: parseFloat(document.getElementById('uiTimerSize').value || '7'),
+                radius_px: parseInt(document.getElementById('uiRadius').value || '30', 10),
+                shadow: document.getElementById('uiShadow').checked,
+                combo_top_px: parseInt(document.getElementById('uiComboTop').value || '20', 10),
+                combo_right_px: parseInt(document.getElementById('uiComboRight').value || '20', 10),
+            };
+            const res = await fetch('/api/ui', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert('Görünüm güncellendi.');
+            }
+        }
+
+        function setInput(id, val, fallback) {
+            const el = document.getElementById(id);
+            el.value = (typeof val === 'string' && val) ? val : fallback;
+        }
+        function setNumber(id, val, fallback) {
+            const el = document.getElementById(id);
+            el.value = (typeof val === 'number') ? val : fallback;
+        }
+        function setColor(pickerId, inputId, val, fallback) {
+            const p = document.getElementById(pickerId);
+            const i = document.getElementById(inputId);
+            const v = (typeof val === 'string' && val) ? val : fallback;
+            p.value = v;
+            i.value = v;
+            p.addEventListener('input', () => { i.value = p.value; });
+            i.addEventListener('input', () => { p.value = i.value; });
+        }
+
+        // --- Subathon Config ---
+        async function loadConfig() {
+            try {
+                const res = await fetch('/api/status');
+                if (!res.ok) return;
+                const data = await res.json();
+                const cfg = data.config || {};
+                setNumber('cfgKickSec', cfg.kick_seconds_per_unit, 5);
+                setNumber('cfgSubMin', cfg.sub_minutes, 30);
+                setNumber('cfgGiftSubMin', cfg.gift_sub_minutes, 30);
+                setNumber('cfgMaxMin', cfg.max_minutes, 180);
+                document.getElementById('cfgEnableKick').checked = !!cfg.enable_kick;
+                document.getElementById('cfgEnableSub').checked = !!cfg.enable_subscription;
+                document.getElementById('cfgEnableGiftSub').checked = !!cfg.enable_gift_subscription;
+                document.getElementById('cfgEnableMax').checked = cfg.enable_max_limit !== false;
+            } catch(_) {}
+        }
+        async function saveConfig() {
+            const payload = {
+                kick_seconds_per_unit: parseInt(document.getElementById('cfgKickSec').value || '5', 10),
+                sub_minutes: parseInt(document.getElementById('cfgSubMin').value || '30', 10),
+                gift_sub_minutes: parseInt(document.getElementById('cfgGiftSubMin').value || '30', 10),
+                max_minutes: parseInt(document.getElementById('cfgMaxMin').value || '180', 10),
+                enable_kick: document.getElementById('cfgEnableKick').checked,
+                enable_subscription: document.getElementById('cfgEnableSub').checked,
+                enable_gift_subscription: document.getElementById('cfgEnableGiftSub').checked,
+                enable_max_limit: document.getElementById('cfgEnableMax').checked,
+            };
+            await fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            alert('Subathon ayarları kaydedildi.');
+        }
+
+        // --- Rewards ---
+        async function loadRewards() {
+            try {
+                const res = await fetch('/api/rewards');
+                if (!res.ok) return;
+                const data = await res.json();
+                const rw = data.rewards || {};
+                document.getElementById('rwEnable').checked = !!rw.enable_rewards;
+                setNumber('rwDefaultSec', rw.default_seconds, 5);
+                const list = document.getElementById('rewardsList');
+                const items = rw.rewards || {};
+                const rows = Object.entries(items).map(([key, rec]) => {
+                    const title = rec.title || key;
+                    const seconds = rec.seconds || 0;
+                    const enabled = !!rec.enabled;
+                    return `
+                        <div class="reward-row" data-key="${key}">
+                            <div>${title}</div>
+                            <div><input type="checkbox" ${enabled ? 'checked' : ''} class="rw-enabled"></div>
+                            <div><input type="number" min="0" max="3600" step="1" value="${seconds}" class="rw-seconds"></div>
+                            <div style="opacity:0.6; font-size:0.9em;">${key}</div>
+                        </div>
+                    `;
+                }).join('');
+                list.innerHTML = rows || '<div style="padding:10px; color:#999;">Henüz ödül görülmedi</div>';
+            } catch(_) {}
+        }
+
+        async function saveRewards() {
+            const list = document.getElementById('rewardsList');
+            const rows = Array.from(list.querySelectorAll('.reward-row'));
+            const rewards = rows.map(row => ({
+                id: row.getAttribute('data-key'),
+                title: row.querySelector('div').textContent,
+                enabled: row.querySelector('.rw-enabled').checked,
+                seconds: parseInt(row.querySelector('.rw-seconds').value || '0', 10)
+            }));
+            const payload = {
+                enable_rewards: document.getElementById('rwEnable').checked,
+                default_seconds: parseInt(document.getElementById('rwDefaultSec').value || '5', 10),
+                rewards
+            };
+            await fetch('/api/rewards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            alert('Ödül ayarları kaydedildi.');
+        }
+
+        // --- Test calls ---
+        async function testSub() {
+            const username = document.getElementById('testSubUser').value || 'Tester';
+            const res = await fetch('/api/test/sub', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username }) });
+            const data = await res.json();
+            alert(data.message || (data.success ? 'OK' : 'Hata'));
+        }
+        async function testGiftSub() {
+            const username = document.getElementById('testGiftUser').value || 'Tester';
+            const quantity = parseInt(document.getElementById('testGiftQty').value || '1', 10);
+            const res = await fetch('/api/test/giftsub', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, quantity }) });
+            const data = await res.json();
+            alert(data.message || (data.success ? 'OK' : 'Hata'));
+        }
+
+        // --- Kick Tiers ---
+        async function loadKickTiers() {
+            try {
+                const res = await fetch('/api/kick_tiers');
+                if (!res.ok) return;
+                const data = await res.json();
+                const kt = data.kick_tiers || {};
+                document.getElementById('ktEnable').checked = !!kt.enable_kick_tiers;
+                const list = document.getElementById('kickTiersList');
+                const tiers = kt.tiers || {};
+                const amounts = Object.keys(tiers).map(x => parseInt(x, 10)).sort((a,b)=>a-b);
+                const rows = amounts.map(amt => {
+                    const rec = tiers[amt] || { seconds: 0, enabled: false };
+                    return `
+                        <div class="reward-row" data-amt="${amt}">
+                            <div>${amt} Kick</div>
+                            <div><input type="checkbox" ${rec.enabled ? 'checked' : ''} class="kt-enabled"></div>
+                            <div><input type="number" min="0" max="3600" step="1" value="${rec.seconds}" class="kt-seconds"></div>
+                            <div style="opacity:0.6; font-size:0.9em;">Tier</div>
+                        </div>
+                    `;
+                }).join('');
+                list.innerHTML = rows || '<div style="padding:10px; color:#999;">Tier bulunamadı</div>';
+            } catch(_) {}
+        }
+        async function saveKickTiers() {
+            const list = document.getElementById('kickTiersList');
+            const rows = Array.from(list.querySelectorAll('.reward-row'));
+            const tiers = rows.map(row => ({
+                amount: parseInt(row.getAttribute('data-amt') || '0', 10),
+                enabled: row.querySelector('.kt-enabled').checked,
+                seconds: parseInt(row.querySelector('.kt-seconds').value || '0', 10)
+            }));
+            const payload = { enable_kick_tiers: document.getElementById('ktEnable').checked, tiers };
+            await fetch('/api/kick_tiers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            alert('Kick tier ayarları kaydedildi.');
+        }
+
+        socket.on('kick_tiers_update', async () => { await loadKickTiers(); });
+    </script>
+</body>
+</html>
+
+

@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subathon Timer</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: transparent;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .timer-container {
+            text-align: center;
+            background: linear-gradient(135deg, var(--bg-start, #667eea) 0%, var(--bg-end, #764ba2) 100%);
+            border-radius: var(--radius-px, 30px);
+            padding: 50px 80px;
+            box-shadow: var(--shadow, 0 20px 60px rgba(0, 0, 0, 0.3));
+            position: relative;
+            overflow: hidden;
+            font-family: var(--font-family, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif);
+        }
+
+        .timer-container::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(
+                45deg,
+                transparent 30%,
+                rgba(255, 255, 255, 0.1) 50%,
+                transparent 70%
+            );
+            animation: shine 3s infinite;
+        }
+
+        @keyframes shine {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .timer-title {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: white;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            margin-bottom: 30px;
+            text-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            position: relative;
+            z-index: 1;
+        }
+
+        .timer-display {
+            font-size: var(--timer-size-em, 7em);
+            font-weight: bold;
+            color: var(--timer-color, #fff);
+            text-shadow: 0 5px 20px rgba(0, 0, 0, 0.4);
+            font-family: var(--timer-font-family, 'Courier New', monospace);
+            letter-spacing: 10px;
+            position: relative;
+            z-index: 1;
+            line-height: 1.2;
+        }
+
+        .timer-ended {
+            font-size: 4em;
+            color: #ff6b6b;
+            font-weight: bold;
+            text-shadow: 0 5px 20px rgba(255, 107, 107, 0.5);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.8; }
+        }
+
+        .timer-label {
+            font-size: 1.5em;
+            color: rgba(255, 255, 255, 0.9);
+            margin-top: 20px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Event notifications */
+        .event-notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 20px 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            animation: slideIn 0.5s ease-out;
+            z-index: 1000;
+            max-width: 400px;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(500px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .event-notification.hiding {
+            animation: slideOut 0.5s ease-out forwards;
+        }
+
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(500px);
+                opacity: 0;
+            }
+        }
+
+        .event-type {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.2);
+            font-size: 0.8em;
+            margin-right: 10px;
+        }
+
+        /* Kick combo tokens and merge effect */
+        .kick-token {
+            position: fixed;
+            top: var(--combo-top, 20px);
+            right: var(--combo-right, 20px);
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            background: rgba(255, 0, 0, 0.15);
+            color: #ff2d2d;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.25);
+            animation: tokenPop 300ms ease-out;
+            overflow: hidden;
+            z-index: 1100;
+        }
+
+        .kick-token img {
+            max-width: 100%;
+            max-height: 100%;
+            display: block;
+        }
+
+        .kick-combo {
+            position: fixed;
+            top: var(--combo-top, 20px);
+            right: var(--combo-right, 20px);
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: linear-gradient(135deg, #ff4d4d 0%, #ff0000 100%);
+            color: white;
+            padding: 10px 16px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(255, 0, 0, 0.35);
+            z-index: 1200;
+            transform-origin: right top;
+        }
+
+        .kick-combo.hidden { display: none; }
+
+        .kick-combo img {
+            width: 36px;
+            height: 36px;
+            border-radius: 6px;
+            background: rgba(255,255,255,0.15);
+        }
+
+        .kick-combo-count {
+            font-weight: 800;
+            font-size: 1.1em;
+            text-shadow: 0 2px 6px rgba(0,0,0,0.25);
+        }
+
+        .kick-combo-time {
+            background: rgba(255,255,255,0.2);
+            padding: 4px 8px;
+            border-radius: 8px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
+        @keyframes tokenPop {
+            from { transform: scale(0.6); opacity: 0; }
+            60% { transform: scale(1.08); opacity: 1; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        @keyframes comboPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.06); }
+        }
+
+        /* Subscription bottom panel */
+        .sub-panel {
+            position: fixed;
+            left: 50%;
+            transform: translateX(-50%);
+            bottom: 20px;
+            min-width: 60%;
+            max-width: 90%;
+            background: linear-gradient(135deg, rgba(102,126,234,0.95) 0%, rgba(118,75,162,0.95) 100%);
+            color: white;
+            border-radius: 16px;
+            padding: 18px 24px;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+            display: none;
+            z-index: 1300;
+        }
+        .sub-panel.show { display: flex; align-items: center; gap: 14px; animation: subIn 250ms ease-out; }
+        .sub-panel .name { font-weight: 800; font-size: 1.2em; color: var(--sub-name-color, #ffeb3b); }
+        .sub-panel .text { opacity: 0.95; }
+        @keyframes subIn { from { transform: translate(-50%, 20px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+        @keyframes subOut { from { transform: translate(-50%, 0); opacity: 1; } to { transform: translate(-50%, 20px); opacity: 0; } }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .timer-container {
+                padding: 30px 40px;
+            }
+            
+            .timer-title {
+                font-size: 1.8em;
+            }
+            
+            .timer-display {
+                font-size: 4em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="timer-container">
+        <div id="timerTitle" class="timer-title">⏱️ SUBATHON</div>
+        <div id="timer" class="timer-display">00:00:00</div>
+        <div id="timerLabel" class="timer-label">KALAN SÜRE</div>
+    </div>
+
+    <!-- Kick combo cluster (top-right) -->
+    <div id="kickCombo" class="kick-combo hidden">
+        <img id="kickComboImg" alt="+5s">
+        <span id="kickComboCount" class="kick-combo-count">x1</span>
+        <span id="kickComboTime" class="kick-combo-time">+5s</span>
+    </div>
+
+    <!-- Subscription bottom panel -->
+    <div id="subPanel" class="sub-panel">
+        <div style="font-size:1.4em">⭐</div>
+        <div>
+            <div id="subPanelName" class="name">Kullanıcı</div>
+            <div id="subPanelText" class="text">abone oldu!</div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io({
+            transports: ['polling', 'websocket'],
+            reconnection: true,
+            reconnectionDelay: 500,
+            reconnectionAttempts: Infinity,
+        });
+        let currentEvent = null;
+        let endTime = null;
+        let countdownInterval = null;
+
+        // Kick combo state
+        let kickUnitSeconds = 5; // will be updated from server config
+        let kickComboVisible = false;
+        let kickComboCount = 0;        // number of 1-unit kicks merged
+        let kickComboSeconds = 0;      // total seconds merged
+        let kickComboHideTimer = null; // timeout to hide combo after inactivity
+        const KICK_IMAGE_URL = '/static/5sn.png'; // place your @5sn.png here
+        
+        // Uygulanmış UI durumunu ayarla
+        function applyUI(ui) {
+            if (!ui) return;
+            const root = document.documentElement;
+            if (ui.bg_start) root.style.setProperty('--bg-start', ui.bg_start);
+            if (ui.bg_end) root.style.setProperty('--bg-end', ui.bg_end);
+            if (ui.timer_color) root.style.setProperty('--timer-color', ui.timer_color);
+            if (typeof ui.timer_font_size_em === 'number') root.style.setProperty('--timer-size-em', ui.timer_font_size_em + 'em');
+            if (typeof ui.radius_px === 'number') root.style.setProperty('--radius-px', ui.radius_px + 'px');
+            if (typeof ui.combo_top_px === 'number') root.style.setProperty('--combo-top', ui.combo_top_px + 'px');
+            if (typeof ui.combo_right_px === 'number') root.style.setProperty('--combo-right', ui.combo_right_px + 'px');
+            if (ui.font_family) root.style.setProperty('--font-family', ui.font_family);
+            if (ui.timer_font_family) root.style.setProperty('--timer-font-family', ui.timer_font_family);
+            // JS'de False yok; false'a göre gölgeyi ayarla
+            root.style.setProperty('--shadow', ui.shadow === false ? 'none' : '0 20px 60px rgba(0, 0, 0, 0.3)');
+            if (ui.title_text) document.getElementById('timerTitle').textContent = ui.title_text;
+            if (ui.label_text) document.getElementById('timerLabel').textContent = ui.label_text;
+            if (ui.sub_name_color) root.style.setProperty('--sub-name-color', ui.sub_name_color);
+        }
+
+        // Fallback polling for reliability
+        let statusPollInterval = null;
+        const seenEventKeys = new Set();
+
+        // Countdown fonksiyonu
+        function updateCountdown() {
+            if (!endTime) return;
+            
+            const now = new Date().getTime();
+            const remaining = endTime - now;
+            
+            const timerElement = document.getElementById('timer');
+            
+            if (remaining <= 0) {
+                timerElement.innerHTML = '<div class="timer-ended">SUBATHON BİTTİ! 🎉</div>';
+                if (countdownInterval) {
+                    clearInterval(countdownInterval);
+                    countdownInterval = null;
+                }
+                endTime = null;
+                return;
+            }
+            
+            // Saat:Dakika:Saniye formatı
+            const totalSeconds = Math.floor(remaining / 1000);
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+            
+            const formatted = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            timerElement.textContent = formatted;
+        }
+
+        // Bağlantı olayları
+        socket.on('connect', async () => {
+            // Bağlanır bağlanmaz mevcut durumu da çek (emitte gecikme olursa diye)
+            try {
+                const res = await fetch('/api/status', { cache: 'no-store' });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.timer) {
+                        // Simüle ederek timer_update yolundan geçir
+                        socket.emit && socket.emit('client_ack'); // no-op
+                        handleTimerUpdate(data.timer);
+                    }
+                    if (data && data.events && Array.isArray(data.events)) {
+                        processEventsBatch(data.events);
+                    }
+                }
+            } catch (e) {
+                console.warn('Status fetch failed', e);
+            }
+
+            // Başlat/yeniden başlat: periyodik status poll (fallback)
+            if (statusPollInterval) clearInterval(statusPollInterval);
+            statusPollInterval = setInterval(async () => {
+                try {
+                    const res = await fetch('/api/status', { cache: 'no-store' });
+                    if (!res.ok) return;
+                    const data = await res.json();
+                    if (data && data.timer) handleTimerUpdate(data.timer);
+                    if (data && Array.isArray(data.events)) processEventsBatch(data.events);
+                } catch (_) { /* ignore */ }
+            }, 1000);
+        });
+
+        socket.on('connect_error', (err) => {
+            console.warn('Socket connect error:', err && (err.message || err));
+        });
+
+        // Timer güncellemesi sunucudan geldiğinde
+        socket.on('timer_update', (data) => {
+            handleTimerUpdate(data);
+        });
+
+        // UI canlı güncelleme
+        socket.on('ui_update', (ui) => {
+            applyUI(ui);
+        });
+
+        function handleTimerUpdate(data) {
+            const timerElement = document.getElementById('timer');
+            if (!data || data.ended || !data.is_running) {
+                timerElement.innerHTML = '<div class="timer-ended">SUBATHON BİTTİ! 🎉</div>';
+                endTime = null;
+                if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
+                return;
+            }
+            endTime = Date.now() + (data.remaining_seconds * 1000);
+            updateCountdown();
+            if (!countdownInterval) {
+                countdownInterval = setInterval(updateCountdown, 100);
+            }
+        }
+
+        function eventKey(ev) {
+            if (!ev) return '';
+            const t = ev.time || '';
+            const m = ev.message || '';
+            const tp = ev.type || '';
+            const s = typeof ev.seconds_added === 'number' ? ev.seconds_added : '';
+            return `${t}|${tp}|${m}|${s}`;
+        }
+
+        function processEventsBatch(events) {
+            // En eskiden yeniye doğru işle ki görsel sırası doğal olsun
+            const batch = [...events].reverse();
+            for (const ev of batch) {
+                const key = eventKey(ev);
+                if (!key || seenEventKeys.has(key)) continue;
+                seenEventKeys.add(key);
+                if (ev.type === 'kick') {
+                    handleKickEvent(ev);
+                }
+            }
+        }
+
+        // Yeni event geldiğinde
+        socket.on('new_event', (event) => {
+            // Show generic notification
+            showEventNotification(event);
+
+            // Special handling for kick events: merge tokens
+            if (event && event.type === 'kick') {
+                handleKickEvent(event);
+            }
+
+            // Subscription / gift subscription panel at bottom
+            if (event && (event.type === 'subscription' || event.type === 'gift_subscription')) {
+                showSubPanel(event);
+            }
+
+            const key = eventKey(event);
+            if (key) seenEventKeys.add(key);
+        });
+
+        // Receive config to update kick unit seconds
+        socket.on('config_update', (config) => {
+            if (config && typeof config.kick_seconds_per_unit === 'number' && config.kick_seconds_per_unit > 0) {
+                kickUnitSeconds = config.kick_seconds_per_unit;
+            }
+        });
+
+        function showEventNotification(event) {
+            // Önceki notification varsa kaldır
+            if (currentEvent) {
+                currentEvent.remove();
+            }
+
+            // Yeni notification oluştur
+            const notification = document.createElement('div');
+            notification.className = 'event-notification';
+            
+            const typeEmoji = {
+                'subscription': '⭐',
+                'gift_subscription': '🎁',
+                'kick': '💰',
+                'reward': '🏆',
+                'manual': '🎮'
+            };
+            
+            const typeLabel = {
+                'subscription': 'ABONE',
+                'gift_subscription': 'HEDİYE ABONELİK',
+                'kick': 'KICK',
+                'reward': 'ÖDÜL',
+                'manual': 'MANUEL'
+            };
+            
+            const emoji = typeEmoji[event.type] || '✨';
+            const label = typeLabel[event.type] || 'EVENT';
+            
+            const seconds = event.seconds_added;
+            const timeText = seconds >= 60 
+                ? `+${Math.floor(seconds / 60)} dakika` 
+                : `+${seconds} saniye`;
+            
+            notification.innerHTML = `
+                <div><span class="event-type">${emoji} ${label}</span></div>
+                <div style="margin-top: 10px;">${event.message}</div>
+                <div style="margin-top: 10px; font-size: 1.5em; color: #ffeb3b;">${timeText}</div>
+            `;
+            
+            document.body.appendChild(notification);
+            currentEvent = notification;
+            
+            // 5 saniye sonra kaldır
+            setTimeout(() => {
+                notification.classList.add('hiding');
+                setTimeout(() => {
+                    if (notification.parentElement) {
+                        notification.remove();
+                    }
+                    if (currentEvent === notification) {
+                        currentEvent = null;
+                    }
+                }, 500);
+            }, 5000);
+        }
+
+        // --- Kick combo logic ---
+        function handleKickEvent(event) {
+            const seconds = Number(event.seconds_added) || kickUnitSeconds;
+            // Convert seconds to count of unit tokens (usually 5s per 1 kick)
+            const units = Math.max(1, Math.round(seconds / kickUnitSeconds));
+
+            // Create visual tokens for each unit with slight stagger
+            for (let i = 0; i < units; i++) {
+                setTimeout(spawnKickToken, i * 60);
+            }
+
+            // Update combo aggregate immediately
+            kickComboCount += units;
+            kickComboSeconds += seconds;
+            renderKickCombo();
+
+            // Reset hide timer
+            if (kickComboHideTimer) clearTimeout(kickComboHideTimer);
+            kickComboHideTimer = setTimeout(() => {
+                hideKickCombo();
+            }, 1600);
+        }
+
+        function spawnKickToken() {
+            const token = document.createElement('div');
+            token.className = 'kick-token';
+
+            // Try to use image; fallback to text if image fails
+            const img = new Image();
+            img.src = KICK_IMAGE_URL;
+            img.alt = '+5s';
+            let usedImage = false;
+            img.onload = () => { usedImage = true; token.appendChild(img); animateToken(token); };
+            img.onerror = () => { if (!usedImage) { token.textContent = `+${kickUnitSeconds}s`; animateToken(token); } };
+
+            document.body.appendChild(token);
+        }
+
+        function animateToken(token) {
+            // Fly towards the combo cluster position, then remove
+            const combo = document.getElementById('kickCombo');
+            const comboRect = combo.getBoundingClientRect();
+            const startX = 0; // already near top-right
+            const startY = 0;
+            const dx = 0; // subtle drift
+            const dy = 0;
+            token.style.transform = `translate(${startX}px, ${startY}px)`;
+
+            requestAnimationFrame(() => {
+                token.style.transition = 'transform 400ms ease-in, opacity 200ms ease-in';
+                token.style.transform = `translate(${dx}px, ${dy}px)`;
+                setTimeout(() => {
+                    token.style.opacity = '0';
+                    setTimeout(() => token.remove(), 180);
+                    // Pulse combo to indicate merge
+                    combo.style.animation = 'comboPulse 300ms ease-out';
+                    setTimeout(() => combo.style.animation = '', 320);
+                }, 280);
+            });
+        }
+
+        function renderKickCombo() {
+            const combo = document.getElementById('kickCombo');
+            const img = document.getElementById('kickComboImg');
+            const countEl = document.getElementById('kickComboCount');
+            const timeEl = document.getElementById('kickComboTime');
+
+            if (!kickComboVisible) {
+                combo.classList.remove('hidden');
+                // Set image with graceful fallback (keep alt if missing)
+                img.src = KICK_IMAGE_URL;
+                img.onerror = () => { img.style.display = 'none'; };
+                kickComboVisible = true;
+            }
+
+            countEl.textContent = `x${kickComboCount}`;
+            timeEl.textContent = `+${kickComboSeconds}s`;
+        }
+
+        function hideKickCombo() {
+            const combo = document.getElementById('kickCombo');
+            combo.classList.add('hidden');
+            kickComboVisible = false;
+            kickComboCount = 0;
+            kickComboSeconds = 0;
+        }
+
+        // --- Subscription bottom panel ---
+        let subPanelTimer = null;
+        function showSubPanel(event) {
+            const panel = document.getElementById('subPanel');
+            const nm = document.getElementById('subPanelName');
+            const tx = document.getElementById('subPanelText');
+            const msg = (event && event.message) || '';
+            // Prefer explicit username if provided by server
+            let username = (event && event.username) || msg.split(' ')[0] || 'Kullanıcı';
+            if (typeof username !== 'string' || !username) username = 'Kullanıcı';
+            nm.textContent = username;
+            tx.textContent = msg.replace(username, '').trim() || 'abone oldu!';
+            panel.classList.add('show');
+            panel.style.animation = 'subIn 250ms ease-out';
+            if (subPanelTimer) clearTimeout(subPanelTimer);
+            subPanelTimer = setTimeout(() => {
+                panel.style.animation = 'subOut 250ms ease-in forwards';
+                setTimeout(() => { panel.classList.remove('show'); panel.style.animation = ''; }, 260);
+            }, 60000); // 1 dakika
+        }
+
+        // Sayfa yüklendiğinde mevcut durumu al
+        socket.on('connect', () => {
+            console.log('WebSocket bağlantısı kuruldu');
+        });
+        // İlk yüklemede UI konfig al
+        (async () => {
+            try {
+                const res = await fetch('/api/ui', { cache: 'no-store' });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.ui) applyUI(data.ui);
+                }
+            } catch (_) {}
+        })();
+
+        // UI için periyodik fallback poll (Socket.IO gelmezse)
+        let uiPollInterval = null;
+        function startUiPolling() {
+            if (uiPollInterval) clearInterval(uiPollInterval);
+            uiPollInterval = setInterval(async () => {
+                try {
+                    const res = await fetch('/api/ui', { cache: 'no-store' });
+                    if (!res.ok) return;
+                    const data = await res.json();
+                    if (data && data.ui) applyUI(data.ui);
+                } catch(_) { /* ignore */ }
+            }, 2000);
+        }
+        startUiPolling();
+    </script>
+</body>
+</html>
+
